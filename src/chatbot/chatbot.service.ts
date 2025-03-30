@@ -178,7 +178,7 @@ export class ChatbotService implements OnModuleInit {
   private getCrisisResponse(): string {
     return (
       `⚠️ **¡Veo que estás en una situación difícil!** ⚠️\n\n` +
-      `1. Llama a tu línea local de ayuda: *0994101922* 📱\n` +
+      `1. Contactate con un profesional: *0979395435* 📱\n` +
       `2. Ejercicio de grounding: Nombra:\n   - 5 cosas que ves 👀\n   - 4 que puedes tocar ✋\n   - 3 que oyes 👂\n` +
       `3. Respira conmigo: Inhala 4s... Mantén 7s... Exhala 8s... 🧘`
     );
@@ -515,7 +515,26 @@ export class ChatbotService implements OnModuleInit {
     const responseMessage = this.getEscalaResponse(escala, user);
 
     if (escala < 5) {
-      return this.offerStressSupport(user, responseMessage);
+      // En lugar de llamar a offerStressSupport, actualizamos el estado
+      await this.userService.updateUser({
+        ...user,
+        isChoosingStressOption: true,
+      });
+
+      // Devolvemos el mensaje básico + el menú completo
+      const options = [
+        '1. 🌄 Foto relajante',
+        '2. 🧘 Video de meditación',
+        '3. 🎵 Música relajante',
+        '4. 💬 Hablar de cómo me siento',
+        '5. ⏰ Configurar recordatorio',
+      ].join('\n');
+
+      return this.buildResponse(
+        `${responseMessage}\n\nElige una opción:\n${options}`,
+        user.userName,
+        escala,
+      );
     }
 
     return this.buildResponse(responseMessage, user.userName, escala);
@@ -539,14 +558,8 @@ export class ChatbotService implements OnModuleInit {
         `También puedes probar con /recursos para encontrar ayuda 🥺`
       );
     } else {
-      return (
-        `Veo que estás pasando un momento difícil ${emoji}. ¿Te gustaría que te ayude con algún recurso para sentirte mejor?\n\n` +
-        `Puedes elegir:\n` +
-        `1. 🌄 Foto relajante\n` +
-        `2. 🧘 Video de meditación\n` +
-        `3. 🎵 Música relajante\n` +
-        `O usar el comando /recursos 🤔`
-      );
+      // Eliminamos el menú de opciones aquí para evitar duplicación
+      return `Veo que estás pasando un momento difícil ${emoji}. ¿Te gustaría que te ayude con algún recurso para sentirte mejor?`;
     }
   }
 
@@ -589,29 +602,6 @@ export class ChatbotService implements OnModuleInit {
     return `Entiendo que te sientas estresado/a 😓 ${userName ? `, ${userName}` : ''}.\n\n`;
   }
 
-  private async offerStressSupport(
-    user: User,
-    initialMessage: string = '',
-  ): Promise<ChatbotResponse> {
-    await this.userService.updateUser({
-      ...user,
-      isChoosingStressOption: true,
-    });
-
-    const options = [
-      '1. 🌄 Foto relajante',
-      '2. 🧘 Video de meditación',
-      '3. 🎵 Música relajante',
-      '4. 💬 Hablar de cómo me siento',
-      '5. ⏰ Configurar recordatorio',
-    ].join('\n');
-
-    return this.buildResponse(
-      `${initialMessage}\n\nParece que podrías necesitar apoyo 🥺. Elige una opción:\n${options}`,
-      user.userName,
-    );
-  }
-
   private async handleStressOptionSelection(
     user: User,
     message: string,
@@ -625,6 +615,7 @@ export class ChatbotService implements OnModuleInit {
       '5': () => this.handleReminderOption(user),
       foto: () => this.handleResourceRequest(user, 'foto'),
       video: () => this.handleResourceRequest(user, 'video'),
+      musica: () => this.handleResourceRequest(user, 'música'),
       música: () => this.handleResourceRequest(user, 'música'),
       hablar: () => this.handleTalkOption(user),
       recordatorio: () => this.handleReminderOption(user),
@@ -688,7 +679,9 @@ export class ChatbotService implements OnModuleInit {
       const responseText =
         type === 'foto'
           ? `Aquí tienes una imagen relajante 🖼️:\n${resource.url}`
-          : `Aquí tienes un video de ${type} 🎵:\n${resource.url}`;
+          : type === 'video'
+            ? `Aquí tienes un video de meditación 📺:\n${resource.url}`
+            : `Aquí tienes música relajante 🎵:\n${resource.url}`;
 
       return this.buildResponse(
         `${responseText}\n\n¿Te gustó? (Responde 👍/👎)`,
